@@ -6,7 +6,7 @@ SystemTest::SystemTest(System &system_, void *processVMSpace, PageNum processVMS
           endSpace((void *) ((uint8_t *) beginSpace + PAGE_SIZE * processVMSpaceSize)) {
 }
 
-Status SystemTest::doInstruction(Process process,
+Status SystemTest::doInstruction(Process &process,
                                  const std::vector<std::tuple<VirtualAddress, AccessType, char>> addresses) {
     for (auto iter = addresses.begin(); iter != addresses.end(); iter++) {
         AccessType accessType = std::get<1>(*iter);

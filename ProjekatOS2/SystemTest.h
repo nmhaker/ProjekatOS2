@@ -12,7 +12,7 @@
 class SystemTest {
 public:
     explicit SystemTest(System& system_, void *processVMSpace, PageNum processVMSpaceSize);
-    Status doInstruction(Process process, const std::vector<std::tuple<VirtualAddress, AccessType, char>> addresses);
+    Status doInstruction(Process& process, const std::vector<std::tuple<VirtualAddress, AccessType, char>> addresses);
     std::mutex& getGlobalMutex();
 private:
     void checkAddress(void *address) const;

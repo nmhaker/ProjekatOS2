@@ -3,6 +3,7 @@
 #include "KernelSystem.h"
 
 #include <list>
+#include <mutex>
 
 class KernelProcess
 {
@@ -32,5 +33,6 @@ private:
 	KernelSystem* sys;
 
 	p_PageDirectory pageDirectory;
+	std::mutex mutex_pageDirectory;
 };
 

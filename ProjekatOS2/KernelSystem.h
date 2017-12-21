@@ -4,6 +4,7 @@
 #include "Process.h"
 
 #include <list>
+#include <mutex>
 
 class KernelSystem
 {
@@ -25,10 +26,10 @@ public:
 	//MY IMPLEMENTATION
 	static unsigned PID;
 
-	PhysicalAddress firstFit(std::list<FreeChunk*> list, unsigned long bytes);
+	PhysicalAddress firstFit(std::list<FreeChunk*>* list, unsigned long bytes);
 	PhysicalAddress getFreeFrame(ProcessId pid);
 
-	std::list<FreeChunk*> getFreePMTChunks();
+	std::list<FreeChunk*>* getFreePMTChunks();
 
 private:
 	PhysicalAddress processVMSpace;
@@ -42,4 +43,8 @@ private:
 	p_SysPageDescriptor pmtTable;
 	
 	std::list<Process*> listOfProcesses;
+
+	std::mutex mutex_freePMTChunks;
+	std::mutex mutex_listOfProcesses;
+	std::mutex mutex_pmtTable;
 };
