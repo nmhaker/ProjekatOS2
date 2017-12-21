@@ -2,6 +2,7 @@
 
 #include <iostream>
 using namespace std;
+#include <windows.h>
 
 #define directoryMask 0xFE0000
 #define pageMask 0x01FC00
@@ -121,7 +122,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 				}
 				pmt[i].init = 1;
 				pmt[i].valid = 1;
-				PhysicalAddress addr = sys->getFreeFrame(this->pid);
+				PhysicalAddress addr = sys->getFreeFrame(&pmt[i]);
 				if (addr == nullptr) {
 					cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI RACUNARA" << endl;
 					cin;
@@ -147,7 +148,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 		}
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
-		PhysicalAddress addr = sys->getFreeFrame(this->pid);
+		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage]);
 		if (addr == nullptr) {
 			cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI" << endl;
 			cin;
@@ -264,7 +265,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 				}
 				pmt[i].init = 1;
 				pmt[i].valid = 1;
-				PhysicalAddress addr = sys->getFreeFrame(this->pid);
+				PhysicalAddress addr = sys->getFreeFrame(&pmt[i]);
 				if (addr == nullptr) {
 					cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI RACUNARA" << endl;
 					cin;
@@ -284,6 +285,9 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 						exit(1);
 					}
 				}
+				// INSERT INTO PAGE FIFO QUEUE, used for page replacement algorithm
+
+				//If all pages loaded break
 				tempCounter--;
 				if (tempCounter == 0) {
 					break;
@@ -302,7 +306,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 		}
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
-		PhysicalAddress addr = sys->getFreeFrame(this->pid);
+		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage]);
 		if (addr == nullptr) {
 			cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI" << endl;
 			cin;
@@ -401,17 +405,22 @@ Status KernelProcess::deleteSegment(VirtualAddress startAddress)
 
 Status KernelProcess::pageFault(VirtualAddress address)
 {
+	std::lock_guard<std::mutex> lock(mutex_pageDirectory);
 	//Take data from VA
 	unsigned dir = (address & directoryMask) >> 17;
 	unsigned page = (address & pageMask) >> 10;
 	unsigned offset = address & offsetMask;
 	
 	//Buffer for loading page from disk
-	char* buffer = nullptr;
+	char* buffer = new char[PAGE_SIZE];
 	//Load page into buffer from disk
-	sys->getPartition()->readCluster(pageDirectory[dir].pageTableAddress[page].disk, buffer);
+	Partition* partition = sys->getPartition();
+	p_PageDirectory pDir = &pageDirectory[dir];
+	p_PageDescriptor pDesc = &pDir->pageTableAddress[page];
+	ClusterNo disk = pDesc->disk;
+	partition->readCluster(disk, buffer);
 	//Get new frame from kernel where to load paged out page
-	PhysicalAddress freeFrame = sys->getFreeFrame(this->pid);
+	PhysicalAddress freeFrame = sys->getFreeFrame(&pageDirectory[dir].pageTableAddress[page]);
 	//Convert to byte pointer for iteration
 	char* byteFrame = reinterpret_cast<char*>(freeFrame);
 	//Write buffer into newly allocated frame
@@ -426,6 +435,15 @@ Status KernelProcess::pageFault(VirtualAddress address)
 	//cout << "Nisam implementirao pageFault()" << endl;
 	//cin;
 	//exit(1);
+	static unsigned long numOfPageFaults = 0;
+	//if (numOfPageFaults++ % 100 == 0) {
+		//char msgbuf[100];
+		//sprintf_s(msgbuf, "Proslo je: %d\n  page faultova do sad", numOfPageFaults);
+		//OutputDebugStringA(msgbuf);
+		numOfPageFaults += 1;	
+		cout << "Proslo je: " << numOfPageFaults << " page faultova do sad" << endl;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	//}
 	return Status::OK;
 }
 

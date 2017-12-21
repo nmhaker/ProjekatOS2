@@ -28,17 +28,18 @@ public:
 	static unsigned PID;
 
 	PhysicalAddress firstFit(std::list<FreeChunk*>* list, unsigned long bytes);
-	PhysicalAddress getFreeFrame(ProcessId pid);
+	PhysicalAddress getFreeFrame(p_PageDescriptor pd);
 
 	std::list<FreeChunk*>* getFreePMTChunks();
 
 	unsigned long freePMTEntry(PhysicalAddress pa);
 	
 	Partition* getPartition();
-	ClusterNo getFreeCluster(ProcessId pid);
+	ClusterNo getFreeCluster();
 	bool setFreeCluster(ClusterNo clust);
 
 	unsigned long phyToNum(PhysicalAddress pa);
+	PhysicalAddress numToPhy(unsigned long num);
 
 protected:
 	unsigned long replacePage();
@@ -61,6 +62,7 @@ private:
 	std::mutex mutex_listOfProcesses;
 	std::mutex mutex_pmtTable;
 	std::mutex mutex_access;
+	std::mutex mutex_replacePage;
 
 	std::queue<unsigned long> fifoQueue;
 };

@@ -22,18 +22,6 @@ struct FreeChunk {
 	unsigned long size;
 };
 
-struct SysPageDescriptor {
-	bool free;
-	ProcessId pid;
-};
-typedef SysPageDescriptor* p_SysPageDescriptor;
-	
-struct SysDiskDescriptor {
-	bool free;
-	ProcessId pid;
-};
-typedef SysDiskDescriptor* p_SysDiskDescriptor;
-
 struct PageDescriptor{
 	bool init;
 	bool valid;
@@ -52,3 +40,15 @@ struct PageDirectory {
 	unsigned long diskAddress; //ClusterNo = unsigned long
 };
 typedef PageDirectory* p_PageDirectory;
+
+struct SysPageDescriptor {
+	bool free;
+	p_PageDescriptor pageDescr;
+};
+typedef SysPageDescriptor* p_SysPageDescriptor;
+	
+struct SysDiskDescriptor {
+	bool free;
+	//ProcessId pid;
+};
+typedef SysDiskDescriptor* p_SysDiskDescriptor;

@@ -29,7 +29,7 @@ KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpac
 	
 	for (unsigned int i = 0; i < processVMSpaceSize; i++) {
 		pmtTable[i].free = true;
-		pmtTable[i].pid = 0;
+		pmtTable[i].pageDescr = nullptr;
 	}
 
 	diskTable = reinterpret_cast<p_SysDiskDescriptor>(firstFit(&freePMTChunks, sizeof(SysDiskDescriptor)*partition->getNumOfClusters()));
@@ -40,7 +40,7 @@ KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpac
 	}
 	for (unsigned int i = 0; i < partition->getNumOfClusters(); i++) {
 		diskTable[i].free = true;
-		diskTable[i].pid = 0;
+		//diskTable[i].pid = 0;
 	}
 
 
@@ -151,13 +151,16 @@ PhysicalAddress KernelSystem::firstFit(std::list<FreeChunk*>* list, unsigned lon
 	return nullptr;
 }
 
-PhysicalAddress KernelSystem::getFreeFrame(ProcessId pid)
+PhysicalAddress KernelSystem::getFreeFrame(p_PageDescriptor pd)
 {
 	std::lock_guard<std::mutex> guard(mutex_pmtTable);
 	for (unsigned long i = 0; i < processVMSpaceSize; i++) {
 		if (pmtTable[i].free) {
 			pmtTable[i].free = false;
-			pmtTable[i].pid = pid;
+			pmtTable[i].pageDescr = pd;
+			//Isert into FIFO QUEUE for page replacement algorithm, to keep track of oldest page loaded into memory
+			fifoQueue.push(i);
+			//Return address of frame
 			return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + i*PAGE_SIZE);
 		}
 	}
@@ -178,9 +181,11 @@ std::list<FreeChunk*>* KernelSystem::getFreePMTChunks()
 
 unsigned long KernelSystem::freePMTEntry(PhysicalAddress pa)
 {
-	unsigned long PA_integer = (reinterpret_cast<unsigned long>(pa) - reinterpret_cast<unsigned long>(processVMSpace))/PAGE_SIZE;
+	std::lock_guard<std::mutex> lock(mutex_pmtTable);
+	unsigned long PA_integer = phyToNum(pa);
 	pmtTable[PA_integer].free = true;
-	pmtTable[PA_integer].pid = 0;
+	pmtTable[PA_integer].pageDescr = nullptr;
+
 	return PA_integer;
 }
 
@@ -189,12 +194,12 @@ Partition * KernelSystem::getPartition()
 	return partition;
 }
 
-ClusterNo KernelSystem::getFreeCluster(ProcessId pid)
+ClusterNo KernelSystem::getFreeCluster()
 {
 	for (unsigned long i = 0; i < partition->getNumOfClusters(); i++) {
 		if (diskTable[i].free) {
 			diskTable[i].free = false;
-			diskTable[i].pid = pid;
+			//diskTable[i].pid = pid;
 			return i;
 		}
 	}
@@ -206,7 +211,7 @@ ClusterNo KernelSystem::getFreeCluster(ProcessId pid)
 bool KernelSystem::setFreeCluster(ClusterNo clust)
 {
 	diskTable[clust].free = true;
-	diskTable[clust].pid = 0;
+	//diskTable[clust].pid = 0;
 	return true;
 }
 
@@ -215,7 +220,36 @@ unsigned long KernelSystem::phyToNum(PhysicalAddress pa)
 	return (reinterpret_cast<unsigned long>(pa) - reinterpret_cast<unsigned long>(processVMSpace))/PAGE_SIZE;
 }
 
+PhysicalAddress KernelSystem::numToPhy(unsigned long num)
+{
+	return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + num*PAGE_SIZE);
+}
+
 unsigned long KernelSystem::replacePage()
 {
-	return 0;
+	std::lock_guard<std::mutex> lock(mutex_replacePage);
+	if (fifoQueue.empty()) {
+		cout << "BUKI:  ERROR Trying to access empty fifoQueue structure for page replacement" << endl;
+		cin;
+		exit(1);
+	}
+	//Get num of victim page
+	unsigned long victimPage = fifoQueue.back();
+	//Remove from queue victim page
+	fifoQueue.pop();
+	//And insert it on the end because it will be accessed now, that is loaded
+	fifoQueue.push(victimPage);
+	//Get PA from victimPage
+	PhysicalAddress vpPA = numToPhy(victimPage);
+	//Alocate one free cluster on disk
+	ClusterNo disk = getFreeCluster();
+	//Convert fram to byte writable
+	char* byteFrame = reinterpret_cast<char*> (vpPA);
+	//Write frame to cluster
+	partition->writeCluster(disk, byteFrame);
+	//Update pageDescriptor in pmt table of process that owned this frame so that its address now points to disk because his frame is not in memory anymore
+	pmtTable[victimPage].pageDescr->valid = false;
+	pmtTable[victimPage].pageDescr->disk = disk;
+	//Return new victimPage which is not zeroed but it will be overwritten 
+	return victimPage;
 }

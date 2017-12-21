@@ -11,7 +11,7 @@ ProcessTest::ProcessTest(System &system, SystemTest &systemTest_) : systemTest(s
     VirtualAddress address;
     PageNum size;
     address = alignToPage(PAGE_SIZE);
-    size = 200;
+    size = 100;
 
     if (OK != addCodeSegment(address, size)) {
         std::cout << "Cannot create code segment in process " << process->getProcessId() << std::endl;
@@ -111,7 +111,7 @@ PhysicalAddress ProcessTest::getPhyAddress(VirtualAddress address) {
 
 void ProcessTest::run() {
 	//JA SAM DODAO
-	std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
     VirtualAddressGenerator rN(0);
     VirtualAddressGenerator::NumberLimits limits;
 
