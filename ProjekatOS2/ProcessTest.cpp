@@ -11,7 +11,7 @@ ProcessTest::ProcessTest(System &system, SystemTest &systemTest_) : systemTest(s
     VirtualAddress address;
     PageNum size;
     address = alignToPage(PAGE_SIZE);
-    size = 100;
+    size = 200;
 
     if (OK != addCodeSegment(address, size)) {
         std::cout << "Cannot create code segment in process " << process->getProcessId() << std::endl;

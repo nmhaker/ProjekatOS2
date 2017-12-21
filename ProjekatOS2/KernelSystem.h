@@ -5,6 +5,7 @@
 
 #include <list>
 #include <mutex>
+#include <queue>
 
 class KernelSystem
 {
@@ -37,6 +38,11 @@ public:
 	ClusterNo getFreeCluster(ProcessId pid);
 	bool setFreeCluster(ClusterNo clust);
 
+	unsigned long phyToNum(PhysicalAddress pa);
+
+protected:
+	unsigned long replacePage();
+
 private:
 	PhysicalAddress processVMSpace;
 	PageNum processVMSpaceSize;
@@ -55,4 +61,6 @@ private:
 	std::mutex mutex_listOfProcesses;
 	std::mutex mutex_pmtTable;
 	std::mutex mutex_access;
+
+	std::queue<unsigned long> fifoQueue;
 };

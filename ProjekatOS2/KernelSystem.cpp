@@ -81,7 +81,7 @@ Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType ty
 			if(pageDir[dir].pageTableAddress[page].init){
 				if (pageDir[dir].pageTableAddress[page].valid) {
 					if (pageDir[dir].pageTableAddress[page].rwe == type) {
-						cout << "VA: " << hex << address << "-> PA: " << hex << (unsigned long)pageDir[dir].pageTableAddress[page].block + offset << endl;
+						cout << "PID: " << pid << "   VA: " << hex << address << " ->   PA: " << hex << (unsigned long)pageDir[dir].pageTableAddress[page].block + offset << endl;
 						//cout << "ACCESS : USPESAN PRISTUP STRANICI" << endl;
 						//cin;
 						return Status::OK;
@@ -161,9 +161,11 @@ PhysicalAddress KernelSystem::getFreeFrame(ProcessId pid)
 			return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + i*PAGE_SIZE);
 		}
 	}
-	cout << "BUKI: MEMORIJA JE PUNA NEMA SLOBODNIH OKVIRA, TREBA DA SE POKRENE PAGING NA DISK NEKOG PROCESA/STRANICE I DA SE OSLOBODE OKVIRI ZA SAD FAIL I EXIT" << endl;
-	cin;
-	exit(1);
+	unsigned long freeFrame = replacePage();
+	return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + freeFrame*PAGE_SIZE);
+	//cout << "BUKI: MEMORIJA JE PUNA NEMA SLOBODNIH OKVIRA, TREBA DA SE POKRENE PAGING NA DISK NEKOG PROCESA/STRANICE I DA SE OSLOBODE OKVIRI ZA SAD FAIL I EXIT" << endl;
+	//cin;
+	//exit(1);
 	// ZA SADA VRACAM NULLPTR ALI
 	// OVDE TREBA DA SE NEKA STRANICA VRATI NA DISK DA BI SE OSLOBODIO OKVIR DA SE ISKORISTI ZA OVAJ PROCES KOJI TRAZI, RADICU GLOBALNU POLITIKU ZAMENE STRANICA STO ZNACI DA NEKI DRUGI PROCES MOZE DA ZAMENI STRANICU NEKOM DRUGOM PROCESU
 	return nullptr;
@@ -206,4 +208,14 @@ bool KernelSystem::setFreeCluster(ClusterNo clust)
 	diskTable[clust].free = true;
 	diskTable[clust].pid = 0;
 	return true;
+}
+
+unsigned long KernelSystem::phyToNum(PhysicalAddress pa)
+{
+	return (reinterpret_cast<unsigned long>(pa) - reinterpret_cast<unsigned long>(processVMSpace))/PAGE_SIZE;
+}
+
+unsigned long KernelSystem::replacePage()
+{
+	return 0;
 }
