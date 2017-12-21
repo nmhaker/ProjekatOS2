@@ -45,3 +45,8 @@ void Process::setSystem(KernelSystem * sys)
 {
 	pProcess->setSystem(sys);
 }
+
+p_PageDirectory Process::getPageDirectory()
+{
+	return pProcess->getPageDirectory();
+}

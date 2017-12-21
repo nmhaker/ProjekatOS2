@@ -47,4 +47,5 @@ private:
 	std::mutex mutex_freePMTChunks;
 	std::mutex mutex_listOfProcesses;
 	std::mutex mutex_pmtTable;
+	std::mutex mutex_access;
 };

@@ -110,6 +110,8 @@ PhysicalAddress ProcessTest::getPhyAddress(VirtualAddress address) {
 }
 
 void ProcessTest::run() {
+	//JA SAM DODAO
+	std::this_thread::sleep_for(std::chrono::milliseconds(10000));
     VirtualAddressGenerator rN(0);
     VirtualAddressGenerator::NumberLimits limits;
 
@@ -121,12 +123,21 @@ void ProcessTest::run() {
     }
 
     for (int i = 0; i < (1 << POWER_OF_NUMBER_OF_INSTRUCTIONS); i++) {
+		//JA SAM DODAO
+		//std::cout << "(1<<POWER_OF_NUMBER_OF_INSTRUCTIONS), i=" << i << std::endl;
+		//-----------
         for (int j = 2; j < checkMemory.size(); j++) {
+			//JA SAM DODAO
+			//std::cout << "checkMemory.size()=" << checkMemory.size() << "j=" << j << std::endl;
+			//------------
             std::vector<VirtualAddress> numbers = rN.getRandomNumbers(limits, j);
             std::vector<std::tuple<VirtualAddress, AccessType, char>> addresses;
 
             addresses.emplace_back(numbers[0], EXECUTE, readFromAddress(numbers[0]));
             for (int k = 1; k < numbers.size(); k++) {
+				//JA SAM DODAO
+				//std::cout << "UKUPNO ITERACIJA: " << numbers.size()*checkMemory.size()* (1 << POWER_OF_NUMBER_OF_INSTRUCTIONS) << std::endl;
+				//------------
                 char data;
                 AccessType type;
                 if ((k + j) % 3) {
@@ -138,12 +149,17 @@ void ProcessTest::run() {
                     type = READ;
                 }
                 addresses.emplace_back(numbers[k], type, data);
-            }
+            	//JA SAM DODAO
+				//std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				//------------
+			}
             Status status = systemTest.doInstruction(*process, addresses);
             if (status != OK) {
                 std::cout << "Instruction in process " << process->getProcessId() << " failed.\n";
                 std::cout << "Terminating process\n";
                 throw std::exception();
+
+			
             }
         }
     }

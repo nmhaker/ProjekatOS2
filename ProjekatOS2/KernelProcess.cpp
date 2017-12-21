@@ -51,7 +51,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 	//Flag that tells if we can allocate segment
 	bool canAllocate = true;
 	//For counting how much more we need to allocate in case i need to go inside other dir
-	PageNum tempCounter = segmentSize;
+	signed long tempCounter = segmentSize;
 	//For going into next dir of PMT
 	unsigned tempCurrentDir = dir;
 	//For incrementing PMT entries inside PMT
@@ -122,8 +122,11 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 				}
 				pmt[i].block = addr;
 				pmt[i].rwe = flags;
+				tempCounter--;
+				if (tempCounter == 0)
+					break;
 			}
-			tempCounter -= MAX_PMT_ENTRIES - tempCurrentPage;
+			//tempCounter -= MAX_PMT_ENTRIES - tempCurrentPage;
 			tempCurrentPage = 0;
 			tempCurrentDir++;
 			continue;
@@ -175,7 +178,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 	//Flag that tells if we can allocate segment
 	bool canAllocate = true;
 	//For counting how much more we need to allocate in case i need to go inside other dir
-	PageNum tempCounter = segmentSize;
+	signed long tempCounter = segmentSize;
 	//For going into next dir of PMT
 	unsigned tempCurrentDir = dir;
 	//For incrementing PMT entries inside PMT
@@ -255,10 +258,19 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 				//INITIALIZE BLOCK WITH DATA
 				char* memoryFrame = reinterpret_cast<char*>(addr);
 				char* byteContent = reinterpret_cast<char*>(content);
-				for(unsigned i=0; i < PAGE_SIZE; i++)
-					memoryFrame[i] = byteContent[bytesTransfered++];
+				for (unsigned j = 0; j < PAGE_SIZE; j++) {
+					memoryFrame[j] = byteContent[bytesTransfered++];
+					if (bytesTransfered > segmentSize*PAGE_SIZE) {
+						cout << "prelazim granicu bajtova" << endl;
+						cin;
+						exit(1);
+					}
+				}
+				tempCounter--;
+				if (tempCounter == 0) {
+					break;
+				}
 			}
-			tempCounter -= MAX_PMT_ENTRIES - tempCurrentPage;
 			tempCurrentPage = 0;
 			tempCurrentDir++;
 			continue;
@@ -342,7 +354,7 @@ PhysicalAddress KernelProcess::getPhysicalAddress(VirtualAddress address)
 		cout << "BUKI: PAGE FAULT" << endl;
 		return nullptr;
 	}
-	return pmt[page].block;
+	return reinterpret_cast<PhysicalAddress>(reinterpret_cast<char*>(pmt[page].block) + offset);
 }
 
 void KernelProcess::setSystem(KernelSystem * sys)
@@ -358,4 +370,9 @@ void KernelProcess::setSystem(KernelSystem * sys)
 		pageDirectory[i].pageTableAddress = nullptr;
 		pageDirectory[i].valid = false;
 	}
+}
+
+p_PageDirectory KernelProcess::getPageDirectory()
+{
+	return this->pageDirectory;
 }

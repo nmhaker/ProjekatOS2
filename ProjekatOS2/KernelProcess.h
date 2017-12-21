@@ -27,6 +27,7 @@ public:
 
 	//My implementation, can be public because it is called by the kernel
 	void setSystem(KernelSystem* sys); //Process needs to have system that owns it
+	p_PageDirectory getPageDirectory();
 
 private:
 	ProcessId pid;

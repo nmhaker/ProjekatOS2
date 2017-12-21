@@ -45,6 +45,7 @@ int main() {
         process[i] = new ProcessTest(system, systemTest);
         threads[i] = new std::thread(&ProcessTest::run, process[i]);
     }
+	std::cout << "MAIN: KREIRANI PROCESI" << std::endl;
 
     Time time;
     while ((time = system.periodicJob())) {
@@ -66,11 +67,13 @@ int main() {
         }
     }
 
+	std::cout << "MAIN: BRISEM PROCESE I NITI" << std::endl;
     for (int i = 0; i < N_PROCESS; i++) {
         threads[i]->join();
         delete threads[i];
         delete process[i];
     }
+	std::cout << "MAIN: OBRISANI PROCESI I NITI" << std::endl;
 
     delete [] vmSpace;
     delete [] pmtSpace;

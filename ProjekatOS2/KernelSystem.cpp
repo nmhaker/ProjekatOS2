@@ -3,9 +3,13 @@
 #include <iostream>
 using namespace std;
 
+#define directoryMask 0xFE0000
+#define pageMask 0x01FC00
+#define offsetMask 0x0003FF
+
 unsigned KernelSystem::PID = 0;
 
-KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpaceSize, PhysicalAddress pmtSpace, PageNum pmtSpaceSize, Partition * partition) : freePMTChunks(), listOfProcesses(), mutex_freePMTChunks(), mutex_listOfProcesses(), mutex_pmtTable()
+KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpaceSize, PhysicalAddress pmtSpace, PageNum pmtSpaceSize, Partition * partition) : freePMTChunks(), listOfProcesses(), mutex_freePMTChunks(), mutex_listOfProcesses(), mutex_pmtTable(), mutex_access()
 {
 	this->processVMSpace = processVMSpace;
 	this->processVMSpaceSize = processVMSpaceSize;
@@ -54,9 +58,46 @@ Time KernelSystem::periodicJob()
 
 Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType type)
 {
-	cout << "POKUSAVA DA POZOVE access !" << endl << "Nisam jojs implementirao xdd" << endl;
+	std::lock_guard<std::mutex> lock(mutex_access);
+	for (Process* p : listOfProcesses) {
+		if (p->getProcessId() == pid) {
+			//Take data from VA
+			unsigned dir = (address & directoryMask) >> 17;
+			unsigned page = (address & pageMask) >> 10;
+			unsigned offset = address & offsetMask;
+			p_PageDirectory pageDir = p->getPageDirectory();
+			if(pageDir[dir].pageTableAddress[page].init){
+				if (pageDir[dir].pageTableAddress[page].valid) {
+					if (pageDir[dir].pageTableAddress[page].rwe == type) {
+						cout << "VA: " << hex << address << "-> PA: " << hex << (unsigned long)pageDir[dir].pageTableAddress[page].block + offset << endl;
+						//cout << "ACCESS : USPESAN PRISTUP STRANICI" << endl;
+						//cin;
+						return Status::OK;
+					} else {
+						cout << "ACCESS : NEUSPESAN PRISTUP STRANICI POGRESNA PRAVA PRISTUPA" << endl;
+						cin;
+						return Status::TRAP;
+					}
+				}
+				else {
+					cout << "STRANICA JE NA DISKU, PAGE FAULT" << endl;
+					cin;
+					return Status::PAGE_FAULT;
+				}
+			}
+			else {
+				cout << "ACCESS: POKUSAVA SE PRISTUPITI NE POSTOJECOJ ADRESI , VRACAM TRAP" << endl;
+				cin;
+				return Status::TRAP;
+			}
+		}
+	}
+	cout << "NIJE PRONADJEN KORISNIK GRESKA" << endl;
 	cin;
 	exit(1);
+	/*cout << "POKUSAVA DA POZOVE access !" << endl << "Nisam jojs implementirao xdd" << endl;
+	cin;
+	exit(1);*/
 }
 
 PhysicalAddress KernelSystem::firstFit(std::list<FreeChunk*>* list, unsigned long bytes) {

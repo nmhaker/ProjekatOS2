@@ -54,7 +54,8 @@ Status SystemTest::doInstruction(Process &process,
             }
             default: break;
         }
-    }
+
+	}
     return PAGE_FAULT;
 }
 

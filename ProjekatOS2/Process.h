@@ -30,7 +30,8 @@ public:
 protected:
 	//Process needs to have system that it belongs to
 	void setSystem(KernelSystem* sys);
-
+	
+	p_PageDirectory getPageDirectory();
 private:
 	KernelProcess *pProcess;
 	friend class System;
