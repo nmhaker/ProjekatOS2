@@ -32,6 +32,18 @@ KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpac
 		pmtTable[i].pid = 0;
 	}
 
+	diskTable = reinterpret_cast<p_SysDiskDescriptor>(firstFit(&freePMTChunks, sizeof(SysDiskDescriptor)*partition->getNumOfClusters()));
+	if (diskTable == nullptr) {
+		cout << "BUKI: NO SPACE FOR SYSTEM DISK TABLE" << endl;
+		cin;
+		exit(1);
+	}
+	for (unsigned int i = 0; i < partition->getNumOfClusters(); i++) {
+		diskTable[i].free = true;
+		diskTable[i].pid = 0;
+	}
+
+
 	cout << "Kreiran system" << endl;
 }
 
@@ -149,6 +161,9 @@ PhysicalAddress KernelSystem::getFreeFrame(ProcessId pid)
 			return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + i*PAGE_SIZE);
 		}
 	}
+	cout << "BUKI: MEMORIJA JE PUNA NEMA SLOBODNIH OKVIRA, TREBA DA SE POKRENE PAGING NA DISK NEKOG PROCESA/STRANICE I DA SE OSLOBODE OKVIRI ZA SAD FAIL I EXIT" << endl;
+	cin;
+	exit(1);
 	// ZA SADA VRACAM NULLPTR ALI
 	// OVDE TREBA DA SE NEKA STRANICA VRATI NA DISK DA BI SE OSLOBODIO OKVIR DA SE ISKORISTI ZA OVAJ PROCES KOJI TRAZI, RADICU GLOBALNU POLITIKU ZAMENE STRANICA STO ZNACI DA NEKI DRUGI PROCES MOZE DA ZAMENI STRANICU NEKOM DRUGOM PROCESU
 	return nullptr;
@@ -157,4 +172,38 @@ PhysicalAddress KernelSystem::getFreeFrame(ProcessId pid)
 std::list<FreeChunk*>* KernelSystem::getFreePMTChunks()
 {
 	return &freePMTChunks;
+}
+
+unsigned long KernelSystem::freePMTEntry(PhysicalAddress pa)
+{
+	unsigned long PA_integer = (reinterpret_cast<unsigned long>(pa) - reinterpret_cast<unsigned long>(processVMSpace))/PAGE_SIZE;
+	pmtTable[PA_integer].free = true;
+	pmtTable[PA_integer].pid = 0;
+	return PA_integer;
+}
+
+Partition * KernelSystem::getPartition()
+{
+	return partition;
+}
+
+ClusterNo KernelSystem::getFreeCluster(ProcessId pid)
+{
+	for (unsigned long i = 0; i < partition->getNumOfClusters(); i++) {
+		if (diskTable[i].free) {
+			diskTable[i].free = false;
+			diskTable[i].pid = pid;
+			return i;
+		}
+	}
+	cout << "BUKI: DISK MEMORIJA JE PUNA NEMA SLOBODNIH OKVIRA, NE MOGU DA PAGE-ujem OKVIR NA DISK ERROR" << endl;
+	cin;
+	exit(1);
+}
+
+bool KernelSystem::setFreeCluster(ClusterNo clust)
+{
+	diskTable[clust].free = true;
+	diskTable[clust].pid = 0;
+	return true;
 }

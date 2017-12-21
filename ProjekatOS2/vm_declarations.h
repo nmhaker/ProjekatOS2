@@ -26,14 +26,20 @@ struct SysPageDescriptor {
 	bool free;
 	ProcessId pid;
 };
-
 typedef SysPageDescriptor* p_SysPageDescriptor;
 	
+struct SysDiskDescriptor {
+	bool free;
+	ProcessId pid;
+};
+typedef SysDiskDescriptor* p_SysDiskDescriptor;
+
 struct PageDescriptor{
 	bool init;
 	bool valid;
 	bool dirty;
 	AccessType rwe;
+	PageNum numOfPages;
 	PhysicalAddress block;
 	unsigned long disk; //ClusterNo = unsigned long
 };

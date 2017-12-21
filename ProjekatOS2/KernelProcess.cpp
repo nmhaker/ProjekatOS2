@@ -101,6 +101,8 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 	tempCurrentDir = dir;
 	//For incrementing PMT entries inside PMT
 	tempCurrentPage = page;
+	//For specifying how long the segment was only in first descriptor
+	bool segmentSet = false;
 	//ALLOCATE SEQUENTIAL ENTRIES
 	while (tempCounter > 0) {
 		p_PageDescriptor pmt = nullptr;
@@ -110,8 +112,13 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 				pmt[i].init = 0;
 				pmt[i].valid = 0;
 				pmt[i].dirty = 0;
+				pmt[i].numOfPages = 0;
 			}
 			for (int i = tempCurrentPage; i < MAX_PMT_ENTRIES; i++) {
+				if (!segmentSet) {
+					pmt[i].numOfPages = segmentSize;
+					segmentSet = true;
+				}
 				pmt[i].init = 1;
 				pmt[i].valid = 1;
 				PhysicalAddress addr = sys->getFreeFrame(this->pid);
@@ -133,6 +140,10 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 		}
 		else {
 			pmt = pageDirectory[tempCurrentDir].pageTableAddress;
+		}
+		if (!segmentSet) {
+			pmt[tempCurrentPage].numOfPages = segmentSize;
+			segmentSet = true;
 		}
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
@@ -234,6 +245,8 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 	//Pointer to current byte to transfer
 	unsigned long bytesTransfered = 0;
 
+	bool segmentSet = false;
+
 	while (tempCounter > 0) {
 		p_PageDescriptor pmt = nullptr;
 		if (pageDirectory[tempCurrentDir].pageTableAddress == nullptr) {
@@ -242,8 +255,13 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 				pmt[i].init = 0;
 				pmt[i].valid = 0;
 				pmt[i].dirty = 0;
+				pmt[i].numOfPages = 0;
 			}
 			for (int i = tempCurrentPage; i < MAX_PMT_ENTRIES; i++) {
+				if (!segmentSet) {
+					pmt[tempCurrentPage].numOfPages = segmentSize;
+					segmentSet = true;
+				}
 				pmt[i].init = 1;
 				pmt[i].valid = 1;
 				PhysicalAddress addr = sys->getFreeFrame(this->pid);
@@ -277,6 +295,10 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 		}
 		else {
 			pmt = pageDirectory[tempCurrentDir].pageTableAddress;
+		}
+		if (!segmentSet) {
+			pmt[tempCurrentPage].numOfPages = segmentSize;
+			segmentSet = true;
 		}
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
@@ -318,18 +340,93 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 Status KernelProcess::deleteSegment(VirtualAddress startAddress)
 {
 	std::lock_guard<std::mutex> lock(mutex_pageDirectory);
-	cout << "Nisam implementirao deleteSegment()" << endl;
-	cin;
-	exit(1);
-	return Status();
+	//Take data from VA
+	unsigned dir = (startAddress & directoryMask) >> 17;
+	unsigned page = (startAddress & pageMask) >> 10;
+	unsigned offset = startAddress & offsetMask;
+	if (offset != 0) {
+		cout << "BUKI: NIJE PORAVNAT SEGMENT NA POCETAK STRANICE VRACAM TRAP" << endl;
+		return Status::TRAP;
+	}//For counting how much more we need to allocate in case i need to go inside other dir
+	signed long tempCounter = 1; //Initialized to 1 to be able to enter the loop. It is initialized inside loop from descriptor->numOfPages
+	//For going into next dir of PMT
+	unsigned tempCurrentDir = dir;
+	//For incrementing PMT entries inside PMT
+	unsigned tempCurrentPage = page;
+
+	//ALLOCATE AND INITIALIZE SEQUENTIAL ENTRIES
+	
+	//Pointer to current byte to transfer
+	unsigned long bytesTransfered = 0;
+
+	bool segmentSet = false;
+
+	while (tempCounter > 0) {
+		p_PageDescriptor pmt = nullptr;
+		if (pageDirectory[tempCurrentDir].pageTableAddress == nullptr) {
+			cout << "BUKI: Hoces da obrises segment koji ne postoji!" << endl;
+			cin;
+			exit(1);
+		}
+		else {
+			pmt = pageDirectory[tempCurrentDir].pageTableAddress;
+		}
+		if (!segmentSet) {
+			if (pmt[tempCurrentPage].numOfPages == 0) {
+				cout << "BUKI: GRESKA POKUSAVAS DA OBRISES STRANICU SEGMENTA, NE KRECES OD GLAVE" << endl;
+				cin;
+				exit(1);
+			}
+			segmentSet = true;
+		}
+
+		sys->freePMTEntry(pmt[tempCurrentPage].block);
+
+		pmt[tempCurrentPage].init = 0;
+		pmt[tempCurrentPage].valid = 0;
+		tempCurrentPage++;
+		tempCounter--;
+
+		if (tempCurrentPage ==  MAX_PMT_ENTRIES)
+		{
+			tempCurrentPage = 0;
+			tempCurrentDir++;
+		}	
+	}
+	//cout << "Nisam implementirao deleteSegment()" << endl;
+	//cin;
+	//exit(1);
+	return Status::OK;
 }
 
 Status KernelProcess::pageFault(VirtualAddress address)
 {
-	cout << "Nisam implementirao pageFault()" << endl;
-	cin;
-	exit(1);
-	return Status();
+	//Take data from VA
+	unsigned dir = (address & directoryMask) >> 17;
+	unsigned page = (address & pageMask) >> 10;
+	unsigned offset = address & offsetMask;
+	
+	//Buffer for loading page from disk
+	char* buffer = nullptr;
+	//Load page into buffer from disk
+	sys->getPartition()->readCluster(pageDirectory[dir].pageTableAddress[page].disk, buffer);
+	//Get new frame from kernel where to load paged out page
+	PhysicalAddress freeFrame = sys->getFreeFrame(this->pid);
+	//Convert to byte pointer for iteration
+	char* byteFrame = reinterpret_cast<char*>(freeFrame);
+	//Write buffer into newly allocated frame
+	for (unsigned i = 0; i < ClusterSize; i++) {
+		byteFrame[i] = buffer[i];
+	}
+	//Set free loaded cluster from disk for others to use
+	sys->setFreeCluster(pageDirectory[dir].pageTableAddress[page].disk);
+	//Validate PMT entry
+	pageDirectory[dir].pageTableAddress[page].block = freeFrame;
+	pageDirectory[dir].pageTableAddress[page].valid = true;
+	//cout << "Nisam implementirao pageFault()" << endl;
+	//cin;
+	//exit(1);
+	return Status::OK;
 }
 
 PhysicalAddress KernelProcess::getPhysicalAddress(VirtualAddress address)

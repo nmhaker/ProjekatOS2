@@ -31,6 +31,12 @@ public:
 
 	std::list<FreeChunk*>* getFreePMTChunks();
 
+	unsigned long freePMTEntry(PhysicalAddress pa);
+	
+	Partition* getPartition();
+	ClusterNo getFreeCluster(ProcessId pid);
+	bool setFreeCluster(ClusterNo clust);
+
 private:
 	PhysicalAddress processVMSpace;
 	PageNum processVMSpaceSize;
@@ -41,6 +47,7 @@ private:
 	std::list<FreeChunk*> freePMTChunks;
 
 	p_SysPageDescriptor pmtTable;
+	p_SysDiskDescriptor diskTable;
 	
 	std::list<Process*> listOfProcesses;
 
