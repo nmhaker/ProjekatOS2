@@ -66,6 +66,19 @@ Time KernelSystem::periodicJob()
 {
 	//NOT IMPLEMENTED YET, RETURNING 0
 	return 0;
+
+	//Find chunks of memory that are segmented that is near each other but not grouped in 1 chunk and group them
+	for (auto it1 = freePMTChunks.begin(); it1 != freePMTChunks.end(); it1++) {
+		for (auto it2 = freePMTChunks.begin(); it2 != freePMTChunks.end(); it2++) {
+			if ((unsigned long)(*it1)->startingAddress + (*it1)->size == (unsigned long)(*it2)->startingAddress) {
+				(*it1)->size += (*it2)->size;
+				delete *it2;
+				freePMTChunks.erase(it2);
+			}
+		}
+	}
+
+	return 1000 * 1000;
 }
 
 Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType type)
