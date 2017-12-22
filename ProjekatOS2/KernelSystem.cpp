@@ -78,7 +78,7 @@ Time KernelSystem::periodicJob()
 		}
 	}
 
-	return 1000 * 1000;
+	return 5 * 1000 * 1000;
 }
 
 Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType type)

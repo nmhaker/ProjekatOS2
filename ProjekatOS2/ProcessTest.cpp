@@ -26,6 +26,17 @@ ProcessTest::ProcessTest(System &system, SystemTest &systemTest_) : systemTest(s
             throw std::exception();
         }
     }
+	//MOJE ZA TESTIRANJE DELETE SEGMENTA
+	//address = alignToPage(PAGE_SIZE);
+	//address += PAGE_SIZE * (size + 1);
+	//address = alignToPage(address);
+	//if (OK != process->deleteSegment(address)) {
+	//	std::cout << "Cannot delete data segment in process " << process->getProcessId() << std::endl;
+	//	throw std::exception();
+	//}
+	//else {
+	//	std::cout << "Deleted segment 0" << std::endl;
+	//}
 }
 
 Status ProcessTest::addCodeSegment(VirtualAddress address, PageNum size) {
@@ -111,7 +122,7 @@ PhysicalAddress ProcessTest::getPhyAddress(VirtualAddress address) {
 
 void ProcessTest::run() {
 	//JA SAM DODAO
-	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+	//std::this_thread::sleep_for(std::chrono::milliseconds(3000));
     VirtualAddressGenerator rN(0);
     VirtualAddressGenerator::NumberLimits limits;
 
