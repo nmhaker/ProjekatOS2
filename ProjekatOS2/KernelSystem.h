@@ -42,7 +42,7 @@ public:
 	PhysicalAddress numToPhy(unsigned long num);
 
 protected:
-	unsigned long replacePage();
+	unsigned long replacePage(p_PageDescriptor pd);
 
 private:
 	PhysicalAddress processVMSpace;
@@ -61,8 +61,7 @@ private:
 	std::mutex mutex_freePMTChunks;
 	std::mutex mutex_listOfProcesses;
 	std::mutex mutex_pmtTable;
-	std::mutex mutex_access;
-	std::mutex mutex_replacePage;
+	//std::mutex mutex_access;
 
 	std::queue<unsigned long> fifoQueue;
 };

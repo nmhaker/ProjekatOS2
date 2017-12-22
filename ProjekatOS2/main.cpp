@@ -8,9 +8,9 @@
 #include "vm_declarations.h"
 #include "ProcessTest.h"
 
-#define VM_SPACE_SIZE (10000)
+#define VM_SPACE_SIZE (5000)
 #define PMT_SPACE_SIZE (3000)
-#define N_PROCESS (10)
+#define N_PROCESS (20)
 #define PERIODIC_JOB_COST (1)
 
 PhysicalAddress alignPointer(PhysicalAddress address) {

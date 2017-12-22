@@ -169,6 +169,9 @@
     <ClInclude Include="SystemTest.h" />
     <ClInclude Include="vm_declarations.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="p1.ini" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

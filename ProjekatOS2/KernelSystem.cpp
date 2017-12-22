@@ -9,7 +9,7 @@ using namespace std;
 
 unsigned KernelSystem::PID = 0;
 
-KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpaceSize, PhysicalAddress pmtSpace, PageNum pmtSpaceSize, Partition * partition) : freePMTChunks(), listOfProcesses(), mutex_freePMTChunks(), mutex_listOfProcesses(), mutex_pmtTable(), mutex_access()
+KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpaceSize, PhysicalAddress pmtSpace, PageNum pmtSpaceSize, Partition * partition) : freePMTChunks(), listOfProcesses(), mutex_freePMTChunks(), mutex_listOfProcesses(), mutex_pmtTable()
 {
 	this->processVMSpace = processVMSpace;
 	this->processVMSpaceSize = processVMSpaceSize;
@@ -70,7 +70,7 @@ Time KernelSystem::periodicJob()
 
 Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType type)
 {
-	std::lock_guard<std::mutex> lock(mutex_access);
+	std::lock_guard<std::mutex> lock(mutex_pmtTable);
 	for (Process* p : listOfProcesses) {
 		if (p->getProcessId() == pid) {
 			//Take data from VA
@@ -79,23 +79,20 @@ Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType ty
 			unsigned offset = address & offsetMask;
 			p_PageDirectory pageDir = p->getPageDirectory();
 			if(pageDir[dir].pageTableAddress[page].init){
-				if (pageDir[dir].pageTableAddress[page].valid) {
-					if (pageDir[dir].pageTableAddress[page].rwe == type) {
+				if (pageDir[dir].pageTableAddress[page].rwe == type) {
+					if (pageDir[dir].pageTableAddress[page].valid) {
 						cout << "PID: " << pid << "   VA: " << hex << address << " ->   PA: " << hex << (unsigned long)pageDir[dir].pageTableAddress[page].block + offset << endl;
-						//cout << "ACCESS : USPESAN PRISTUP STRANICI" << endl;
-						//cin;
 						return Status::OK;
 					} else {
-						cout << "ACCESS : NEUSPESAN PRISTUP STRANICI POGRESNA PRAVA PRISTUPA" << endl;
-						cin;
-						return Status::TRAP;
+						cout << "STRANICA: "<< address << " JE NA DISKU, PAGE FAULT" << endl;
+						//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+						return Status::PAGE_FAULT;
 					}
 				}
 				else {
-					cout << "STRANICA JE NA DISKU, PAGE FAULT" << endl;
-					cin;
-					return Status::PAGE_FAULT;
-				}
+						cout << "ACCESS : NEUSPESAN PRISTUP STRANICI POGRESNA PRAVA PRISTUPA" << endl;
+						cin;
+						return Status::TRAP;				}
 			}
 			else {
 				cout << "ACCESS: POKUSAVA SE PRISTUPITI NE POSTOJECOJ ADRESI , VRACAM TRAP" << endl;
@@ -107,9 +104,6 @@ Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType ty
 	cout << "NIJE PRONADJEN KORISNIK GRESKA" << endl;
 	cin;
 	exit(1);
-	/*cout << "POKUSAVA DA POZOVE access !" << endl << "Nisam jojs implementirao xdd" << endl;
-	cin;
-	exit(1);*/
 }
 
 PhysicalAddress KernelSystem::firstFit(std::list<FreeChunk*>* list, unsigned long bytes) {
@@ -164,7 +158,7 @@ PhysicalAddress KernelSystem::getFreeFrame(p_PageDescriptor pd)
 			return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + i*PAGE_SIZE);
 		}
 	}
-	unsigned long freeFrame = replacePage();
+	unsigned long freeFrame = replacePage(pd);
 	return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + freeFrame*PAGE_SIZE);
 	//cout << "BUKI: MEMORIJA JE PUNA NEMA SLOBODNIH OKVIRA, TREBA DA SE POKRENE PAGING NA DISK NEKOG PROCESA/STRANICE I DA SE OSLOBODE OKVIRI ZA SAD FAIL I EXIT" << endl;
 	//cin;
@@ -225,16 +219,15 @@ PhysicalAddress KernelSystem::numToPhy(unsigned long num)
 	return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + num*PAGE_SIZE);
 }
 
-unsigned long KernelSystem::replacePage()
+unsigned long KernelSystem::replacePage(p_PageDescriptor pd)
 {
-	std::lock_guard<std::mutex> lock(mutex_replacePage);
 	if (fifoQueue.empty()) {
 		cout << "BUKI:  ERROR Trying to access empty fifoQueue structure for page replacement" << endl;
 		cin;
 		exit(1);
 	}
 	//Get num of victim page
-	unsigned long victimPage = fifoQueue.back();
+	unsigned long victimPage = fifoQueue.front();
 	//Remove from queue victim page
 	fifoQueue.pop();
 	//And insert it on the end because it will be accessed now, that is loaded
@@ -250,6 +243,10 @@ unsigned long KernelSystem::replacePage()
 	//Update pageDescriptor in pmt table of process that owned this frame so that its address now points to disk because his frame is not in memory anymore
 	pmtTable[victimPage].pageDescr->valid = false;
 	pmtTable[victimPage].pageDescr->disk = disk;
+	//Change the descriptor that it belongs to to new process
+	pmtTable[victimPage].pageDescr = pd;
 	//Return new victimPage which is not zeroed but it will be overwritten 
+	//cout << "SENDING FRAME TO DISK" << endl;
+	//std::this_thread::sleep_for(std::chrono::milliseconds(400));
 	return victimPage;
 }

@@ -66,4 +66,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="p1.ini">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
 </Project>

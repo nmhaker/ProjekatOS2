@@ -406,6 +406,8 @@ Status KernelProcess::deleteSegment(VirtualAddress startAddress)
 Status KernelProcess::pageFault(VirtualAddress address)
 {
 	std::lock_guard<std::mutex> lock(mutex_pageDirectory);
+	cout << "PAGE FAULT HANDLER " << address << endl;
+	//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	//Take data from VA
 	unsigned dir = (address & directoryMask) >> 17;
 	unsigned page = (address & pageMask) >> 10;
@@ -432,18 +434,12 @@ Status KernelProcess::pageFault(VirtualAddress address)
 	//Validate PMT entry
 	pageDirectory[dir].pageTableAddress[page].block = freeFrame;
 	pageDirectory[dir].pageTableAddress[page].valid = true;
-	//cout << "Nisam implementirao pageFault()" << endl;
-	//cin;
-	//exit(1);
+
+
 	static unsigned long numOfPageFaults = 0;
-	//if (numOfPageFaults++ % 100 == 0) {
-		//char msgbuf[100];
-		//sprintf_s(msgbuf, "Proslo je: %d\n  page faultova do sad", numOfPageFaults);
-		//OutputDebugStringA(msgbuf);
-		numOfPageFaults += 1;	
-		cout << "Proslo je: " << numOfPageFaults << " page faultova do sad" << endl;
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-	//}
+	numOfPageFaults += 1;	
+	cout << "Proslo je: " << numOfPageFaults << " page faultova do sad" << endl;
+
 	return Status::OK;
 }
 
