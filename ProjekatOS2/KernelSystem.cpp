@@ -65,7 +65,7 @@ Process * KernelSystem::createProcess()
 Time KernelSystem::periodicJob()
 {
 	//NOT IMPLEMENTED YET, RETURNING 0
-	return 0;
+	//return 0;
 
 	//Find chunks of memory that are segmented that is near each other but not grouped in 1 chunk and group them
 	for (auto it1 = freePMTChunks.begin(); it1 != freePMTChunks.end(); it1++) {
@@ -203,7 +203,8 @@ Partition * KernelSystem::getPartition()
 
 ClusterNo KernelSystem::getFreeCluster()
 {
-	for (unsigned long i = 0; i < partition->getNumOfClusters(); i++) {
+	//clusterNo = 0 is reserved for check in descriptor to know if it should get page that is paged out from the disk or it should get if from source address because it was overwritten and not paged out because its dirty bit was 0; Its better to waste 1KB that is 1 cluster for infinite pages than to waste 1B inside every descriptor for boolean flag, because 10000 Pages result in 10KB wasted memory for flag while this way it results in 1KB wasted disk space, for 1M pages it is 1MB wasted memory while this uses only 1KB of disk
+	for (unsigned long i = 1; i < partition->getNumOfClusters(); i++) {
 		if (diskTable[i].free) {
 			diskTable[i].free = false;
 			//diskTable[i].pid = pid;
@@ -245,21 +246,27 @@ unsigned long KernelSystem::replacePage(p_PageDescriptor pd)
 	fifoQueue.pop();
 	//And insert it on the end because it will be accessed now, that is loaded
 	fifoQueue.push(victimPage);
-	//Get PA from victimPage
-	PhysicalAddress vpPA = numToPhy(victimPage);
-	//Alocate one free cluster on disk
-	ClusterNo disk = getFreeCluster();
-	//Convert fram to byte writable
-	char* byteFrame = reinterpret_cast<char*> (vpPA);
-	//Write frame to cluster
-	partition->writeCluster(disk, byteFrame);
-	//Update pageDescriptor in pmt table of process that owned this frame so that its address now points to disk because his frame is not in memory anymore
+	//If this page is dirty then we need to page it out on disk, otherwise overwrite over it cause it is in memory
+	if (pmtTable[victimPage].pageDescr->dirty) {
+		//Get PA from victimPage
+		PhysicalAddress vpPA = numToPhy(victimPage);
+		//Alocate one free cluster on disk
+		ClusterNo disk = getFreeCluster();
+		//Convert fram to byte writable
+		char* byteFrame = reinterpret_cast<char*> (vpPA);
+		//Write frame to cluster
+		partition->writeCluster(disk, byteFrame);
+		//Update pageDescriptor in pmt table of process that owned this frame so that its address now points to disk because his frame is not in memory anymore
+		pmtTable[victimPage].pageDescr->disk = disk;
+
+	} else {
+		//Update pageDescriptor in pmt table of process that owned this frame so that its address now points to clusterNo=0 because his frame is not in memory anymore but must be returned from source address
+		pmtTable[victimPage].pageDescr->disk = 0;
+	}
+	//Set flag to invalid to know it is not in memory
 	pmtTable[victimPage].pageDescr->valid = false;
-	pmtTable[victimPage].pageDescr->disk = disk;
 	//Change the descriptor that it belongs to to new process
 	pmtTable[victimPage].pageDescr = pd;
 	//Return new victimPage which is not zeroed but it will be overwritten 
-	//cout << "SENDING FRAME TO DISK" << endl;
-	//std::this_thread::sleep_for(std::chrono::milliseconds(400));
 	return victimPage;
 }

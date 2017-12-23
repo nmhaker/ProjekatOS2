@@ -4,6 +4,9 @@
 using namespace std;
 #include <windows.h>
 
+#include <windows.system.h>
+
+
 #define directoryMask 0xFE0000
 #define pageMask 0x01FC00
 #define offsetMask 0x0003FF
@@ -130,6 +133,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 				}
 				pmt[i].block = addr;
 				pmt[i].rwe = flags;
+				pmt[i].sourceAddress = nullptr;
 				tempCounter--;
 				if (tempCounter == 0)
 					break;
@@ -148,6 +152,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 		}
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
+		pmt[tempCurrentPage].dirty = 0;
 		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage]);
 		if (addr == nullptr) {
 			cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI" << endl;
@@ -156,6 +161,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 		}
 		pmt[tempCurrentPage].block = addr;
 		pmt[tempCurrentPage].rwe = flags;
+		pmt[tempCurrentPage].sourceAddress = nullptr;
 		tempCurrentPage++;
 		tempCounter--;
 		if (tempCurrentPage ==  MAX_PMT_ENTRIES)
@@ -273,10 +279,11 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 				}
 				pmt[i].block = addr;
 				pmt[i].rwe = flags;
-
+				
 				//INITIALIZE BLOCK WITH DATA
 				char* memoryFrame = reinterpret_cast<char*>(addr);
 				char* byteContent = reinterpret_cast<char*>(content);
+				pmt[i].sourceAddress = reinterpret_cast<PhysicalAddress>(byteContent + bytesTransfered);
 				for (unsigned j = 0; j < PAGE_SIZE; j++) {
 					memoryFrame[j] = byteContent[bytesTransfered++];
 					if (bytesTransfered > segmentSize*PAGE_SIZE) {
@@ -306,6 +313,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 		}
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
+		pmt[tempCurrentPage].dirty = 0;
 		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage]);
 		if (addr == nullptr) {
 			cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI" << endl;
@@ -313,13 +321,14 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 			exit(1);
 		}
 		pmt[tempCurrentPage].block = addr;
-		pmt[tempCurrentPage].rwe = flags;
+		pmt[tempCurrentPage].rwe = flags; 
 		tempCurrentPage++;
 		tempCounter--;
 
 		//INITIALIZE BLOCK WITH DATA
 		char* memoryFrame = reinterpret_cast<char*>(addr);
 		char* byteContent = reinterpret_cast<char*>(content);
+		pmt[tempCurrentPage].sourceAddress = reinterpret_cast<PhysicalAddress>(byteContent + bytesTransfered);	
 		for(unsigned i=0; i < PAGE_SIZE; i++)
 			memoryFrame[i] = byteContent[bytesTransfered++];
 		//-------
@@ -413,32 +422,48 @@ Status KernelProcess::pageFault(VirtualAddress address)
 	unsigned page = (address & pageMask) >> 10;
 	unsigned offset = address & offsetMask;
 	
-	//Buffer for loading page from disk
-	char* buffer = new char[PAGE_SIZE];
-	//Load page into buffer from disk
-	Partition* partition = sys->getPartition();
-	p_PageDirectory pDir = &pageDirectory[dir];
-	p_PageDescriptor pDesc = &pDir->pageTableAddress[page];
-	ClusterNo disk = pDesc->disk;
-	partition->readCluster(disk, buffer);
 	//Get new frame from kernel where to load paged out page
+	//Here system pages out some other frame to make room for this page getFreeFrame -> replacePage () :)  , if there are no free frames
 	PhysicalAddress freeFrame = sys->getFreeFrame(&pageDirectory[dir].pageTableAddress[page]);
-	//Convert to byte pointer for iteration
-	char* byteFrame = reinterpret_cast<char*>(freeFrame);
-	//Write buffer into newly allocated frame
-	for (unsigned i = 0; i < ClusterSize; i++) {
-		byteFrame[i] = buffer[i];
+
+	//Buffer for loading page from disk or source address
+	char* buffer = new char[PAGE_SIZE];
+
+	if (pageDirectory[dir].pageTableAddress[page].disk == 0) {
+		//Load page into buffer from source address
+		buffer = reinterpret_cast<char*>(pageDirectory[dir].pageTableAddress[page].sourceAddress);
+		//Convert to byte pointer for iteration
+		char* byteFrame = reinterpret_cast<char*>(freeFrame);
+		//Write buffer into newly allocated frame
+		for (unsigned i = 0; i < ClusterSize; i++) {
+			byteFrame[i] = buffer[i];
+		}
+		//Validate PMT entry
+		pageDirectory[dir].pageTableAddress[page].block = freeFrame;
+		pageDirectory[dir].pageTableAddress[page].valid = true;
+		cout << "				SOURCE ADDRESS PAGE FAULT! " << endl;
 	}
-	//Set free loaded cluster from disk for others to use
-	sys->setFreeCluster(pageDirectory[dir].pageTableAddress[page].disk);
-	//Validate PMT entry
-	pageDirectory[dir].pageTableAddress[page].block = freeFrame;
-	pageDirectory[dir].pageTableAddress[page].valid = true;
-
-
+	else {
+		//Load page into buffer from disk
+		Partition* partition = sys->getPartition();
+		partition->readCluster(pageDirectory[dir].pageTableAddress[page].disk, buffer);
+		
+		//Convert to byte pointer for iteration
+		char* byteFrame = reinterpret_cast<char*>(freeFrame);
+		//Write buffer into newly allocated frame
+		for (unsigned i = 0; i < ClusterSize; i++) {
+			byteFrame[i] = buffer[i];
+		}
+		//Set free loaded cluster from disk for others to use
+		sys->setFreeCluster(pageDirectory[dir].pageTableAddress[page].disk);
+		//Validate PMT entry
+		pageDirectory[dir].pageTableAddress[page].block = freeFrame;
+		pageDirectory[dir].pageTableAddress[page].valid = true;
+		cout << "				DISK PAGE FAULT! " << endl;
+	}
 	static unsigned long numOfPageFaults = 0;
 	numOfPageFaults += 1;	
-	cout << "Proslo je: " << numOfPageFaults << " page faultova do sad" << endl;
+	cout << "               Proslo je: " << numOfPageFaults << " page faultova do sad" << endl;
 
 	return Status::OK;
 }

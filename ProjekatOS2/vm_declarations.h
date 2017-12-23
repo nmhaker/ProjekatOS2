@@ -30,6 +30,7 @@ struct PageDescriptor{
 	PageNum numOfPages;
 	PhysicalAddress block;
 	unsigned long disk; //ClusterNo = unsigned long
+	PhysicalAddress sourceAddress;
 };
 typedef PageDescriptor* p_PageDescriptor;
 
