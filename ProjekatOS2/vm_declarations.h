@@ -1,6 +1,9 @@
 #pragma once
 
 //#include "part.h"
+#include <mutex>
+
+class KernelProcess;
 
 typedef unsigned long PageNum;
 typedef unsigned long VirtualAddress;
@@ -45,11 +48,11 @@ typedef PageDirectory* p_PageDirectory;
 struct SysPageDescriptor {
 	bool free;
 	p_PageDescriptor pageDescr;
+	KernelProcess* proc;
 };
 typedef SysPageDescriptor* p_SysPageDescriptor;
 	
 struct SysDiskDescriptor {
 	bool free;
-	//ProcessId pid;
 };
 typedef SysDiskDescriptor* p_SysDiskDescriptor;

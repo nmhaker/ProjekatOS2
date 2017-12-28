@@ -1,5 +1,6 @@
 #include <cassert>
 #include "SystemTest.h"
+#include "ProcessTest.h"
 
 SystemTest::SystemTest(System &system_, void *processVMSpace, PageNum processVMSpaceSize)
         : mutex(), system(system_), beginSpace(processVMSpace),
@@ -7,7 +8,8 @@ SystemTest::SystemTest(System &system_, void *processVMSpace, PageNum processVMS
 }
 
 Status SystemTest::doInstruction(Process &process,
-                                 const std::vector<std::tuple<VirtualAddress, AccessType, char>> addresses) {
+                                 const std::vector<std::tuple<VirtualAddress, AccessType, char>> addresses,
+                                ProcessTest &processTest) {
     for (auto iter = addresses.begin(); iter != addresses.end(); iter++) {
         AccessType accessType = std::get<1>(*iter);
         VirtualAddress address = std::get<0>(*iter);
@@ -31,8 +33,8 @@ Status SystemTest::doInstruction(Process &process,
                 PhysicalAddress pa = process.getPhysicalAddress(address);
                 checkAddress(pa);
                 value = *(char *) pa;
-                assert(value == expectedValue);
-                return OK;
+                processTest.checkValue(address, expectedValue);
+                break;
             }
             case WRITE: {
                 std::lock_guard<std::mutex> guard(mutex);
@@ -50,13 +52,13 @@ Status SystemTest::doInstruction(Process &process,
                 PhysicalAddress pa = process.getPhysicalAddress(address);
                 checkAddress(pa);
                 *(char *) pa = expectedValue;
-                return OK;
+				processTest.markDirty(address);
+                break;
             }
             default: break;
         }
-
-	}
-    return PAGE_FAULT;
+    }
+    return OK;
 }
 
 void SystemTest::checkAddress(void *address) const {

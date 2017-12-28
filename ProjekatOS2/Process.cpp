@@ -41,6 +41,16 @@ PhysicalAddress Process::getPhysicalAddress(VirtualAddress address)
 	return pProcess->getPhysicalAddress(address);
 }
 
+bool Process::checkDirty(VirtualAddress address)
+{
+	return pProcess->checkDirty(address);
+}
+
+void Process::setDirty(VirtualAddress address)
+{
+	return pProcess->setDirty(address);
+}
+
 void Process::setSystem(KernelSystem * sys)
 {
 	pProcess->setSystem(sys);

@@ -29,6 +29,12 @@ public:
 	void setSystem(KernelSystem* sys); //Process needs to have system that owns it
 	p_PageDirectory getPageDirectory();
 
+	void acquireMutex();
+	void releaseMutex();
+
+	bool checkDirty(VirtualAddress address);
+	void setDirty(VirtualAddress address);
+	
 private:
 	ProcessId pid;
 	KernelSystem* sys;

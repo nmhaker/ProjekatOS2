@@ -26,6 +26,9 @@ public:
 	Status pageFault(VirtualAddress address);
 	PhysicalAddress getPhysicalAddress(VirtualAddress address);
 
+	bool checkDirty(VirtualAddress address);
+	void setDirty(VirtualAddress address);
+
 //All of my implementation will be protected
 protected:
 	//Process needs to have system that it belongs to

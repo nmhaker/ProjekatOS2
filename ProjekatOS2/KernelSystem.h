@@ -6,6 +6,7 @@
 #include <list>
 #include <mutex>
 #include <queue>
+#include <fstream>
 
 class KernelSystem
 {
@@ -28,7 +29,7 @@ public:
 	static unsigned PID;
 
 	PhysicalAddress firstFit(std::list<FreeChunk*>* list, unsigned long bytes);
-	PhysicalAddress getFreeFrame(p_PageDescriptor pd);
+	PhysicalAddress getFreeFrame(p_PageDescriptor pd, KernelProcess* proc);
 
 	std::list<FreeChunk*>* getFreePMTChunks();
 
@@ -41,8 +42,11 @@ public:
 	unsigned long phyToNum(PhysicalAddress pa);
 	PhysicalAddress numToPhy(unsigned long num);
 
+	void removeProcess(ProcessId pid);
+
+	std::ofstream outputFile;
 protected:
-	unsigned long replacePage(p_PageDescriptor pd);
+	unsigned long replacePage(p_PageDescriptor pd, KernelProcess*p);
 
 private:
 	PhysicalAddress processVMSpace;
@@ -61,7 +65,10 @@ private:
 	std::mutex mutex_freePMTChunks;
 	std::mutex mutex_listOfProcesses;
 	std::mutex mutex_pmtTable;
+	std::mutex mutex_diskTable;
 	//std::mutex mutex_access;
 
 	std::queue<unsigned long> fifoQueue;
+
 };
+

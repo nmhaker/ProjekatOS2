@@ -7,8 +7,9 @@
 #include "part.h"
 #include "vm_declarations.h"
 #include "ProcessTest.h"
+#include "SystemTest.h"
 
-#define VM_SPACE_SIZE (5000)
+#define VM_SPACE_SIZE (10000)
 #define PMT_SPACE_SIZE (3000)
 #define N_PROCESS (20)
 #define PERIODIC_JOB_COST (1)
@@ -45,7 +46,6 @@ int main() {
         process[i] = new ProcessTest(system, systemTest);
         threads[i] = new std::thread(&ProcessTest::run, process[i]);
     }
-	std::cout << "MAIN: KREIRANI PROCESI" << std::endl;
 
     Time time;
     while ((time = system.periodicJob())) {
@@ -67,13 +67,11 @@ int main() {
         }
     }
 
-	std::cout << "MAIN: BRISEM PROCESE I NITI" << std::endl;
     for (int i = 0; i < N_PROCESS; i++) {
         threads[i]->join();
         delete threads[i];
         delete process[i];
     }
-	std::cout << "MAIN: OBRISANI PROCESI I NITI" << std::endl;
 
     delete [] vmSpace;
     delete [] pmtSpace;

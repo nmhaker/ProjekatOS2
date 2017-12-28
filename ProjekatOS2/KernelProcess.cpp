@@ -4,9 +4,6 @@
 using namespace std;
 #include <windows.h>
 
-#include <windows.system.h>
-
-
 #define directoryMask 0xFE0000
 #define pageMask 0x01FC00
 #define offsetMask 0x0003FF
@@ -25,6 +22,7 @@ KernelProcess::KernelProcess(ProcessId pid) : mutex_pageDirectory()
 
 KernelProcess::~KernelProcess()
 {
+	sys->removeProcess(this->pid);
 }
 
 ProcessId KernelProcess::getProcessId() const
@@ -117,6 +115,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 				pmt[i].valid = 0;
 				pmt[i].dirty = 0;
 				pmt[i].numOfPages = 0;
+				pmt[i].disk = 0;
 			}
 			for (int i = tempCurrentPage; i < MAX_PMT_ENTRIES; i++) {
 				if (!segmentSet) {
@@ -125,7 +124,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 				}
 				pmt[i].init = 1;
 				pmt[i].valid = 1;
-				PhysicalAddress addr = sys->getFreeFrame(&pmt[i]);
+				PhysicalAddress addr = sys->getFreeFrame(&pmt[i], this);
 				if (addr == nullptr) {
 					cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI RACUNARA" << endl;
 					cin;
@@ -153,7 +152,7 @@ Status KernelProcess::createSegment(VirtualAddress startAddress, PageNum segment
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
 		pmt[tempCurrentPage].dirty = 0;
-		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage]);
+		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage], this);
 		if (addr == nullptr) {
 			cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI" << endl;
 			cin;
@@ -263,6 +262,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 				pmt[i].valid = 0;
 				pmt[i].dirty = 0;
 				pmt[i].numOfPages = 0;
+				pmt[i].disk = 0;
 			}
 			for (int i = tempCurrentPage; i < MAX_PMT_ENTRIES; i++) {
 				if (!segmentSet) {
@@ -271,7 +271,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 				}
 				pmt[i].init = 1;
 				pmt[i].valid = 1;
-				PhysicalAddress addr = sys->getFreeFrame(&pmt[i]);
+				PhysicalAddress addr = sys->getFreeFrame(&pmt[i],this);
 				if (addr == nullptr) {
 					cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI RACUNARA" << endl;
 					cin;
@@ -314,7 +314,7 @@ Status KernelProcess::loadSegment(VirtualAddress startAddress, PageNum segmentSi
 		pmt[tempCurrentPage].init = 1;
 		pmt[tempCurrentPage].valid = 1;
 		pmt[tempCurrentPage].dirty = 0;
-		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage]);
+		PhysicalAddress addr = sys->getFreeFrame(&pmt[tempCurrentPage], this);
 		if (addr == nullptr) {
 			cout << "BUKI: NEMA SLOBODNIH OKVIRA U MEMORIJI" << endl;
 			cin;
@@ -415,21 +415,38 @@ Status KernelProcess::deleteSegment(VirtualAddress startAddress)
 Status KernelProcess::pageFault(VirtualAddress address)
 {
 	std::lock_guard<std::mutex> lock(mutex_pageDirectory);
-	cout << "PAGE FAULT HANDLER " << address << endl;
+	//cout << "PAGE FAULT HANDLER " << address << endl;
 	//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	//Take data from VA
 	unsigned dir = (address & directoryMask) >> 17;
 	unsigned page = (address & pageMask) >> 10;
 	unsigned offset = address & offsetMask;
 	
+	//Check for access violation
+	if (pageDirectory[dir].pageTableAddress[page].init == 0) {
+		cout << "PAGE_FAULT EXCEPTION: ACCESS VIOLATION, INIT = 0" << endl;
+		exit(1);
+	}
 	//Get new frame from kernel where to load paged out page
 	//Here system pages out some other frame to make room for this page getFreeFrame -> replacePage () :)  , if there are no free frames
-	PhysicalAddress freeFrame = sys->getFreeFrame(&pageDirectory[dir].pageTableAddress[page]);
+	PhysicalAddress freeFrame = sys->getFreeFrame(&pageDirectory[dir].pageTableAddress[page],this);
 
 	//Buffer for loading page from disk or source address
 	char* buffer = new char[PAGE_SIZE];
 
-	if (pageDirectory[dir].pageTableAddress[page].disk == 0) {
+	if(pageDirectory[dir].pageTableAddress[page].disk == 0){
+		//Just allocate new frame and return it if it was empty page created by createSegment(...)
+		if (pageDirectory[dir].pageTableAddress[page].sourceAddress == nullptr) {
+			//Validate PMT entry
+			pageDirectory[dir].pageTableAddress[page].block = freeFrame;
+			pageDirectory[dir].pageTableAddress[page].valid = true;	
+			pageDirectory[dir].pageTableAddress[page].dirty = false;	
+			static unsigned long numOfEmptyPageFaults = 0;
+			numOfEmptyPageFaults++;
+			cout << "               Proslo je: " << numOfEmptyPageFaults << " EMPTY page faultova do sad" << endl;
+			sys->outputFile << "               Proslo je: " << numOfEmptyPageFaults << " EMPTY page faultova do sad" << endl;
+			return Status::OK;
+		}
 		//Load page into buffer from source address
 		buffer = reinterpret_cast<char*>(pageDirectory[dir].pageTableAddress[page].sourceAddress);
 		//Convert to byte pointer for iteration
@@ -438,10 +455,15 @@ Status KernelProcess::pageFault(VirtualAddress address)
 		for (unsigned i = 0; i < ClusterSize; i++) {
 			byteFrame[i] = buffer[i];
 		}
-		//Validate PMT entry
-		pageDirectory[dir].pageTableAddress[page].block = freeFrame;
-		pageDirectory[dir].pageTableAddress[page].valid = true;
-		cout << "				SOURCE ADDRESS PAGE FAULT! " << endl;
+
+		pageDirectory[dir].pageTableAddress[page].dirty = false;	
+
+		static unsigned long numOfSourcePageFaults = 0;
+		numOfSourcePageFaults += 1;	
+		cout << "               Proslo je: " << numOfSourcePageFaults << " SOURCE page faultova do sad" << endl;
+		sys->outputFile << "               Proslo je: " << numOfSourcePageFaults << " SOURCE page faultova do sad" << endl;
+
+	//cout << "				SOURCE ADDRESS PAGE FAULT! " << endl;
 	}
 	else {
 		//Load page into buffer from disk
@@ -456,14 +478,20 @@ Status KernelProcess::pageFault(VirtualAddress address)
 		}
 		//Set free loaded cluster from disk for others to use
 		sys->setFreeCluster(pageDirectory[dir].pageTableAddress[page].disk);
-		//Validate PMT entry
-		pageDirectory[dir].pageTableAddress[page].block = freeFrame;
-		pageDirectory[dir].pageTableAddress[page].valid = true;
-		cout << "				DISK PAGE FAULT! " << endl;
+		
+		pageDirectory[dir].pageTableAddress[page].dirty = true;	
+
+		static unsigned long numOfDiskPageFaults = 0;
+		numOfDiskPageFaults += 1;	
+		cout << "               Proslo je: " << numOfDiskPageFaults << " DISK page faultova do sad" << endl;
+		sys->outputFile << "               Proslo je: " << numOfDiskPageFaults << " DISK page faultova do sad" << endl;
+		//exit(1);
+		//cout << "				DISK PAGE FAULT! " << endl;
 	}
-	static unsigned long numOfPageFaults = 0;
-	numOfPageFaults += 1;	
-	cout << "               Proslo je: " << numOfPageFaults << " page faultova do sad" << endl;
+	//Validate PMT entry
+	pageDirectory[dir].pageTableAddress[page].block = freeFrame;
+	pageDirectory[dir].pageTableAddress[page].valid = true;	
+	pageDirectory[dir].pageTableAddress[page].disk = 0;	
 
 	return Status::OK;
 }
@@ -487,7 +515,8 @@ PhysicalAddress KernelProcess::getPhysicalAddress(VirtualAddress address)
 		exit(1);
 	}
 	if (!pmt[page].valid) {
-		cout << "BUKI: PAGE FAULT" << endl;
+		cout << "BUKI: TRYING TO GET PA FROM VA WHERE valid=0 PAGE FAULT" << endl;
+		exit(1);
 		return nullptr;
 	}
 	return reinterpret_cast<PhysicalAddress>(reinterpret_cast<char*>(pmt[page].block) + offset);
@@ -511,4 +540,76 @@ void KernelProcess::setSystem(KernelSystem * sys)
 p_PageDirectory KernelProcess::getPageDirectory()
 {
 	return this->pageDirectory;
+}
+
+void KernelProcess::acquireMutex()
+{
+	while (!this->mutex_pageDirectory.try_lock()) {
+		cout << "POKUSAVAM DA PRISTUPIM DESKRIPTORU, SPAVAM 1s" << endl;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	};
+	//this->mutex_pageDirectory.lock();
+}
+
+void KernelProcess::releaseMutex()
+{
+	this->mutex_pageDirectory.unlock();
+}
+
+bool KernelProcess::checkDirty(VirtualAddress address)
+{
+	std::lock_guard<std::mutex> lock(mutex_pageDirectory);
+	//Take data from VA
+	unsigned dir = (address & directoryMask) >> 17;
+	unsigned page = (address & pageMask) >> 10;
+	unsigned offset = address & offsetMask;
+	p_PageDescriptor pmt = pageDirectory[dir].pageTableAddress;
+	if (pmt == nullptr) {
+		cout << "BUKI: ACCESS VIOLATION" << endl;
+		cin;
+		exit(1);
+	}
+	if (!pmt[page].init) {
+		cout << "BUKI: ACCESS VIOLATION" << endl;
+		cin;
+		exit(1);
+	}
+	if (!pmt[page].valid) {
+		cout << "BUKI: TRYING TO GET PA FROM VA WHERE valid=0 PAGE FAULT" << endl;
+		exit(1);
+		return nullptr;
+	}
+	if (!pmt[page].dirty) {
+		return false;
+	}
+	else {
+		return true;
+	}
+
+}
+
+void KernelProcess::setDirty(VirtualAddress address)
+{
+	std::lock_guard<std::mutex> lock(mutex_pageDirectory);
+	//Take data from VA
+	unsigned dir = (address & directoryMask) >> 17;
+	unsigned page = (address & pageMask) >> 10;
+	unsigned offset = address & offsetMask;
+	p_PageDescriptor pmt = pageDirectory[dir].pageTableAddress;
+	if (pmt == nullptr) {
+		cout << "BUKI: ACCESS VIOLATION" << endl;
+		cin;
+		exit(1);
+	}
+	if (!pmt[page].init) {
+		cout << "BUKI: ACCESS VIOLATION" << endl;
+		cin;
+		exit(1);
+	}
+	if (!pmt[page].valid) {
+		cout << "BUKI: TRYING TO GET PA FROM VA WHERE valid=0 PAGE FAULT" << endl;
+		exit(1);
+	}
+
+	pmt[page].dirty = true;
 }
