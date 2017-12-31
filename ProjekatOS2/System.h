@@ -21,6 +21,10 @@ public:
 
 	Time periodicJob();
 
+	//Second part
+	Process *cloneProcess(ProcessId pid);
+	//----------
+
 	//Hardware job
 	Status access(ProcessId pid, VirtualAddress address, AccessType type);
 

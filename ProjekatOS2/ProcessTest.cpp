@@ -8,26 +8,34 @@
 #define POWER_OF_NUMBER_OF_INSTRUCTIONS (6)
 
 ProcessTest::ProcessTest(System &system, SystemTest &systemTest_) : systemTest(systemTest_), finished(false) {
+
     process = system.createProcess();
 
-    VirtualAddress address;
-    PageNum size;
-    address = alignToPage(PAGE_SIZE);
-    size = 100;
+	//if (process->getProcessId() > 2) {
+	//	process = system.cloneProcess(0);
+	//}
+	//else {
+		VirtualAddress address;
+		PageNum size;
+		address = alignToPage(PAGE_SIZE);
+		size = 100;
 
-    if (OK != addCodeSegment(address, size)) {
-        std::cout << "Cannot create code segment in process " << process->getProcessId() << std::endl;
-        throw std::exception();
-    }
+		if (OK != addCodeSegment(address, size)) {
+			std::cout << "Cannot create code segment in process " << process->getProcessId() << std::endl;
+			throw std::exception();
+		}
 
-    for (int i = 0; i < 10; i++) {
-        address += PAGE_SIZE * (size + 1);
-        address = alignToPage(address);
-        if (OK != addDataSegment(address, size)) {
-            std::cout << "Cannot create data segment in process " << process->getProcessId() << std::endl;
-            throw std::exception();
-        }
-    }
+		for (int i = 0; i < 10; i++) {
+			address += PAGE_SIZE * (size + 1);
+			address = alignToPage(address);
+			if (OK != addDataSegment(address, size)) {
+				std::cout << "Cannot create data segment in process " << process->getProcessId() << std::endl;
+				throw std::exception();
+			}
+		}
+	//}
+
+    
 }
 
 Status ProcessTest::addCodeSegment(VirtualAddress address, PageNum size) {

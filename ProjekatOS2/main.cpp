@@ -9,9 +9,9 @@
 #include "ProcessTest.h"
 #include "SystemTest.h"
 
-#define VM_SPACE_SIZE (10000)
+#define VM_SPACE_SIZE (5000)
 #define PMT_SPACE_SIZE (3000)
-#define N_PROCESS (20)
+#define N_PROCESS (10)
 #define PERIODIC_JOB_COST (1)
 
 PhysicalAddress alignPointer(PhysicalAddress address) {
@@ -43,8 +43,9 @@ int main() {
 
     for (int i = 0; i < N_PROCESS; i++) {
         std::cout << "Create process " << i << std::endl;
-        process[i] = new ProcessTest(system, systemTest);
-        threads[i] = new std::thread(&ProcessTest::run, process[i]);
+
+		process[i] = new ProcessTest(system, systemTest);
+		threads[i] = new std::thread(&ProcessTest::run, process[i]);	
     }
 
     Time time;

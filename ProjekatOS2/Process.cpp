@@ -41,14 +41,29 @@ PhysicalAddress Process::getPhysicalAddress(VirtualAddress address)
 	return pProcess->getPhysicalAddress(address);
 }
 
-bool Process::checkDirty(VirtualAddress address)
+Process * Process::clone(ProcessId pid)
 {
-	return pProcess->checkDirty(address);
+	return pProcess->clone(pid);
 }
 
-void Process::setDirty(VirtualAddress address)
+Status Process::createSharedSegment(VirtualAddress startAddress, PageNum segmentSize, const char * name, AccessType flags)
 {
-	return pProcess->setDirty(address);
+	return pProcess->createSharedSegment(startAddress, segmentSize, name, flags);
+}
+
+Status Process::disconnectSharedSegment(const char * name)
+{
+	return pProcess->disconnectSharedSegment(name);
+}
+
+Status Process::deleteSharedSegment(const char * name)
+{
+	return pProcess->deleteSharedSegment(name, false);
+}
+
+Status Process::deleteSharedSegmentSystem(const char * name, bool systemCall)
+{
+	return pProcess->deleteSharedSegment(name, systemCall);
 }
 
 void Process::setSystem(KernelSystem * sys)

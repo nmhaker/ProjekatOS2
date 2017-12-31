@@ -4,6 +4,7 @@
 
 #include <list>
 #include <mutex>
+#include <fstream>
 
 class KernelProcess
 {
@@ -29,17 +30,22 @@ public:
 	void setSystem(KernelSystem* sys); //Process needs to have system that owns it
 	p_PageDirectory getPageDirectory();
 
-	void acquireMutex();
-	void releaseMutex();
+	//Second part
+	Process* clone(ProcessId pid);
+	Status createSharedSegment(VirtualAddress startAddress, PageNum segmentSize, const char* name, AccessType flags);
+	Status disconnectSharedSegment(const char* name);
+	Status deleteSharedSegment(const char* name, bool systemCall);
+	//---------
 
-	bool checkDirty(VirtualAddress address);
-	void setDirty(VirtualAddress address);
-	
 private:
 	ProcessId pid;
 	KernelSystem* sys;
 
 	p_PageDirectory pageDirectory;
 	std::mutex mutex_pageDirectory;
+	
+	std::list<p_SharedSegment> listOfSharedSegments;
+	std::mutex mutex_listOfSharedSegments;
+
 };
 

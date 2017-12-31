@@ -56,3 +56,14 @@ struct SysDiskDescriptor {
 	bool free;
 };
 typedef SysDiskDescriptor* p_SysDiskDescriptor;
+
+struct SharedSegment {
+	VirtualAddress startAddress;
+	PageNum segmentSize;
+	const char* name;
+	AccessType flags;
+	ProcessId pid;
+	unsigned long counter;
+};
+typedef SharedSegment* p_SharedSegment;
+

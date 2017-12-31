@@ -10,7 +10,7 @@ using namespace std;
 
 unsigned KernelSystem::PID = 0;
 
-KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpaceSize, PhysicalAddress pmtSpace, PageNum pmtSpaceSize, Partition * partition) : freePMTChunks(), listOfProcesses(), mutex_freePMTChunks(), mutex_listOfProcesses(), mutex_pmtTable(), mutex_diskTable()
+KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpaceSize, PhysicalAddress pmtSpace, PageNum pmtSpaceSize, Partition * partition) : freePMTChunks(), listOfProcesses(),listOfSharedSegments(),  mutex_freePMTChunks(), mutex_listOfProcesses(), mutex_pmtTable(), mutex_diskTable(), mutex_listOfSharedSegments()
 {
 	this->processVMSpace = processVMSpace;
 	this->processVMSpaceSize = processVMSpaceSize;
@@ -23,8 +23,7 @@ KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpac
 	pmtTable = reinterpret_cast<p_SysPageDescriptor>(firstFit(&freePMTChunks,sizeof(SysPageDescriptor)*processVMSpaceSize));
 	
 	if (pmtTable == nullptr) {
-		cout << "BUKI : NO SPACE FOR SYSTEM PMT TABLE" << endl;
-		cin;
+		cout << "NO SPACE FOR SYSTEM PMT TABLE" << endl;
 		exit(1);
 	}
 	
@@ -35,26 +34,19 @@ KernelSystem::KernelSystem(PhysicalAddress processVMSpace, PageNum processVMSpac
 
 	diskTable = reinterpret_cast<p_SysDiskDescriptor>(firstFit(&freePMTChunks, sizeof(SysDiskDescriptor)*partition->getNumOfClusters()));
 	if (diskTable == nullptr) {
-		cout << "BUKI: NO SPACE FOR SYSTEM DISK TABLE" << endl;
-		cin;
+		cout << " NO SPACE FOR SYSTEM DISK TABLE" << endl;
 		exit(1);
 	}
 	for (unsigned int i = 0; i < partition->getNumOfClusters(); i++) {
 		diskTable[i].free = true;
-		//diskTable[i].pid = 0;
 	}
 
-	outputFile.open("output.txt");
-
-	cout << "Kreiran system" << endl;
-	outputFile << "Kreiran system" << endl;
 }
 
 KernelSystem::~KernelSystem()
 {
 	freePMTChunks.clear();
 	listOfProcesses.clear();
-	outputFile.close();
 }
 
 Process * KernelSystem::createProcess()
@@ -68,10 +60,11 @@ Process * KernelSystem::createProcess()
 
 Time KernelSystem::periodicJob()
 {
-	//NOT IMPLEMENTED YET, RETURNING 0
 	return 0;
 
-	//Find chunks of memory that are segmented that is near each other but not grouped in 1 chunk and group them
+	//Find chunks of memory that are segmented that are near each other but not grouped in 1 chunk and group them
+	std::lock_guard<std::mutex> lock(mutex_freePMTChunks);
+	
 	for (auto it1 = freePMTChunks.begin(); it1 != freePMTChunks.end(); it1++) {
 		for (auto it2 = freePMTChunks.begin(); it2 != freePMTChunks.end(); it2++) {
 			if ((unsigned long)(*it1)->startingAddress + (*it1)->size == (unsigned long)(*it2)->startingAddress) {
@@ -82,7 +75,7 @@ Time KernelSystem::periodicJob()
 		}
 	}
 
-	return 5 * 1000 * 1000;
+	return 0;
 }
 
 Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType type)
@@ -102,28 +95,23 @@ Status KernelSystem::access(ProcessId pid, VirtualAddress address, AccessType ty
 						
 						if (type == WRITE) {
 							pageDir[dir].pageTableAddress[page].dirty = true;
-							outputFile << "WRITE INSTRUCTION" << endl;
 							cout << "WRITE INSTRUCTION " << endl;
 						} else {
 							if (type == READ){
-								outputFile << "READ" << " INSTRUCTION" << endl;
 								cout << "READ INSTRUCTION" << endl;
 							}
 							else if (type == READ_WRITE) {
-								outputFile << "READ_WRITE" << " INSTRUCTION" << endl;
 								cout << "READ_WRITE INSTRUCTION" << endl;
 							}
 							else if (type == EXECUTE) {
-								outputFile << "EXECUTE" << " INSTRUCTION" << endl;
 								cout << "EXECUTE INSTRUCTION" << endl;
 							}
 						}
 						cout << "PID: " << pid << "   VA: " << hex << address << " ->   PA: " << hex << (unsigned long)pageDir[dir].pageTableAddress[page].block + offset << endl;
-						outputFile << "PID: " << pid << "   VA: " << hex << address << " ->   PA: " << hex << (unsigned long)pageDir[dir].pageTableAddress[page].block + offset << endl;
 						return Status::OK;
 					} else {
-						cout << "STRANICA: "<< address << " JE PAGED OUT, PAGE FAULT" << endl;
-						outputFile << "STRANICA: "<< address << " JE PAGED OUT, PAGE FAULT" << endl;
+						//cout << "STRANICA: "<< address << " JE PAGED OUT, PAGE FAULT" << endl;
+						//outputFile << "STRANICA: "<< address << " JE PAGED OUT, PAGE FAULT" << endl;
 						//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 						return Status::PAGE_FAULT;
 					}
@@ -261,6 +249,17 @@ PhysicalAddress KernelSystem::numToPhy(unsigned long num)
 	return reinterpret_cast<PhysicalAddress>((reinterpret_cast<char*>(processVMSpace)) + num*PAGE_SIZE);
 }
 
+Process * KernelSystem::getProcess(ProcessId pid)
+{
+	std::lock_guard<std::mutex> lock(mutex_listOfProcesses);
+
+	for (Process* p : listOfProcesses) {
+		if (p->getProcessId() == pid)
+			return p;
+	}
+	return nullptr;
+}
+
 void KernelSystem::removeProcess(ProcessId pid)
 {
 	std::lock_guard<std::mutex> lock(mutex_listOfProcesses);
@@ -275,13 +274,61 @@ void KernelSystem::removeProcess(ProcessId pid)
 	exit(1);
 }
 
+Process * KernelSystem::cloneProcess(ProcessId pid)
+{
+	for (Process* p : listOfProcesses) {
+		if (p->getProcessId() == pid) {
+			Process* clone = p->clone(KernelSystem::PID++);
+			listOfProcesses.emplace_back(std::move(clone));
+			return clone;
+		}
+	}
+	return nullptr;
+}
+
+void KernelSystem::insertSharedSegment(p_SharedSegment ss)
+{
+	std::lock_guard<std::mutex> lock(mutex_listOfSharedSegments);
+	listOfSharedSegments.emplace_back(std::move(ss));
+	cout << "System: insertSharedSegment: " << ss->name << endl;
+}
+
+void KernelSystem::deleteSharedSegment(p_SharedSegment ss, ProcessId pid)
+{
+	std::lock_guard<std::mutex> lock(mutex_listOfSharedSegments);
+	//First remove segment from list so that recursion doesnt occur when calling deleteSharedSegment and disconnectSharedSegment one from another
+	for(p_SharedSegment s : listOfSharedSegments)
+		if (s->name == ss->name) {
+			listOfSharedSegments.remove(ss);
+			//Go through all processes and delete shared segments
+			for (Process *p : listOfProcesses)
+				if (p->getProcessId() != pid)
+					p->deleteSharedSegmentSystem(ss->name, true);
+			break;
+		}
+	cout << "System: deletedSharedSegment: " << ss->name << endl;
+}
+
+p_SharedSegment KernelSystem::getSharedSegment(const char * name)
+{
+	//std::lock_guard<std::mutex> lock(mutex_listOfSharedSegments);
+	for(p_SharedSegment ss : listOfSharedSegments)
+		if (ss->name == name) {
+			//System shared segment found in the system
+			cout << "Found shared segment: '" << name << endl;
+			return ss;
+		}
+	return nullptr;
+}
+
 unsigned long KernelSystem::replacePage(p_PageDescriptor pd, KernelProcess* p)
 {
+	//This method is being called implicitly by method getFreeFrame, so it must be ensured here that it doesnt deadlock the same thread if i try to call it again, because this method will be called from other places also, therefore it will call  
 	//std::lock_guard<std::mutex> lock(p->getMutex());
 	//p->acquireMutex();
 
 	if (fifoQueue.empty()) {
-		cout << "BUKI:  ERROR Trying to access empty fifoQueue structure for page replacement" << endl;
+		cout << " ERROR Trying to access empty fifoQueue structure for page replacement" << endl;
 		exit(1);
 	}
 	//Get num of victim page

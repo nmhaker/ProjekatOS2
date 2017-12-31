@@ -240,3 +240,7 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+/ProjekatOS2/output.txt
+/ProjekatOS2/disk1.dat
+/ProjekatOS2/output_javni_test_success_1.txt
+/ProjekatOS2/output_javni_test_success_2.txt

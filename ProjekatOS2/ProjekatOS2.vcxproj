@@ -172,6 +172,10 @@
   <ItemGroup>
     <None Include="p1.ini" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="output.txt" />
+    <Text Include="sharedmaping.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

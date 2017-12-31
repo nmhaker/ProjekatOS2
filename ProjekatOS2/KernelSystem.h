@@ -4,6 +4,7 @@
 #include "Process.h"
 
 #include <list>
+#include <map>
 #include <mutex>
 #include <queue>
 #include <fstream>
@@ -42,13 +43,23 @@ public:
 	unsigned long phyToNum(PhysicalAddress pa);
 	PhysicalAddress numToPhy(unsigned long num);
 
+	Process* getProcess(ProcessId pid);
 	void removeProcess(ProcessId pid);
 
-	std::ofstream outputFile;
+	//Second part
+	Process* cloneProcess(ProcessId pid);
+
+	//std::list<p_SharedSegment> getListOfSharedSegments();
+	void insertSharedSegment(p_SharedSegment ss);
+	void deleteSharedSegment(p_SharedSegment ss, ProcessId pid);
+	p_SharedSegment getSharedSegment(const char* name);
+	//------------
+
 protected:
 	unsigned long replacePage(p_PageDescriptor pd, KernelProcess*p);
 
 private:
+
 	PhysicalAddress processVMSpace;
 	PageNum processVMSpaceSize;
 	PhysicalAddress pmtSpace;
@@ -66,9 +77,9 @@ private:
 	std::mutex mutex_listOfProcesses;
 	std::mutex mutex_pmtTable;
 	std::mutex mutex_diskTable;
-	//std::mutex mutex_access;
+	std::mutex mutex_listOfSharedSegments;
 
 	std::queue<unsigned long> fifoQueue;
 
+	std::list<p_SharedSegment> listOfSharedSegments;
 };
-
